@@ -6,6 +6,8 @@ services:
       dockerfile: back.dockerfile
     volumes:
       # REMOVE local code-sync volumes in production; build them into the Dockerfile instead
+      - ./api:/api
+      - ./alembic:/alembic     
       - ./backups:/backups
       - ./uploads:/app/uploads
     ports:
