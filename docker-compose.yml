@@ -5,31 +5,49 @@ services:
       context: .
       dockerfile: back.dockerfile
     volumes:
-      - ./api:/api
-      - ./alembic:/alembic
+      # REMOVE local code-sync volumes in production; build them into the Dockerfile instead
       - ./backups:/backups
       - ./uploads:/app/uploads
     ports:
-      - 8000:8000
+      - "127.0.0.1:8000:8000" # Expose only to localhost (secure behind an Nginx proxy)
     env_file:
       - .env
     depends_on:
-      - database_postgres_for_motor
+      database_postgres_for_motor:
+        condition: service_healthy # Wait for database to fully accept connections
     environment:
       - DATABASE_URL=postgresql+asyncpg://root:root@database_postgres_for_motor:5432/db_motor
+    deploy:
+      resources:
+        limits:
+          memory: 1.5gb # Limit FastAPI memory allocation
     restart: always
+
   database_postgres_for_motor:  
     container_name: database_for_motor 
-    image: postgres
+    image: postgres:16-alpine # Always use a specific, lightweight version tag
     restart: always
-    ports:
-      - 5432:5432
+    # REMOVE published ports so your database is not exposed to the public internet
     environment:
-      POSTGRES_PASSWORD: root
+      POSTGRES_PASSWORD: root # Change this to a strong password via your .env file
       POSTGRES_USER: root
       POSTGRES_DB: db_motor 
     volumes:
-      - pg_data_data:/var/lib/postgresql/data/data
+      - pg_data_data:/var/lib/postgresql/data # FIX: Corrected target directory
+    deploy:
+      resources:
+        limits:
+          memory: 1.5gb # Prevent Postgres from crashing the e2-medium VM
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c work_mem=16MB
+      -c max_connections=50
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d db_motor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pg_data_data:
